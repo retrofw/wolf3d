@@ -1,0 +1,10 @@
+Package: wolf3d
+Version: 
+Description: RetroGame port of Wolfeinstein 3D
+Section: emus
+Priority: optional
+Maintainer: pingflood
+Architecture: mipsel
+Homepage: https://github.com/retrofw/wolf3d
+Depends:
+Source: https://github.com/retrofw/wolf3d
