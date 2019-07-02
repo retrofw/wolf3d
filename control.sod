@@ -1,0 +1,10 @@
+Package: SOD
+Version: 
+Description: Spear of Destiny port
+Section: games
+Priority: optional
+Maintainer: scooterpsu
+Architecture: mipsel
+Homepage: https://github.com/scooterpsu/wolf3d
+Depends:
+Source: https://github.com/scooterpsu/wolf3d

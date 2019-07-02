@@ -1,0 +1,142 @@
+CONFIG ?= config.default
+-include $(CONFIG)
+
+DEFINES = -DVERSIONALREADYCHOSEN -DCARMACIZED -DGOODTIMES
+
+CHAINPREFIX := /opt/mipsel-linux-uclibc
+CROSS_COMPILE := $(CHAINPREFIX)/usr/bin/mipsel-linux-
+
+CC  := $(CROSS_COMPILE)gcc
+CXX := $(CROSS_COMPILE)g++
+STRIP := $(CROSS_COMPILE)strip
+
+target = wolf3d
+
+section := $(shell sed -n control.$(target) -e 's/^.*Section: //p')
+title := $(shell sed -n control.$(target) -e 's/^.*Package: //p')
+description := $(shell sed -n control.$(target) -e 's/^.*Description: //p')
+
+BINARY    ?= $(target)/$(target).dge
+PREFIX    ?= .
+MANPREFIX ?= $(PREFIX)
+
+INSTALL         ?= install
+INSTALL_PROGRAM ?= $(INSTALL) -m 555 -s
+INSTALL_MAN     ?= $(INSTALL) -m 444
+INSTALL_DATA    ?= $(INSTALL) -m 444
+
+SYSROOT := $(shell $(CC) --print-sysroot)
+SDL_CFLAGS := $(shell $(SYSROOT)/usr/bin/sdl-config --cflags)
+SDL_LIBS := $(shell $(SYSROOT)/usr/bin/sdl-config --libs)
+
+CFLAGS += $(SDL_CFLAGS)
+
+#CFLAGS += -Wall
+#CFLAGS += -W
+CFLAGS += -Wpointer-arith
+CFLAGS += -Wreturn-type
+CFLAGS += -Wwrite-strings
+CFLAGS += -Wcast-align
+#CFLAGS += -DGP2X
+CFLAGS += $(DEFINES)
+
+CCFLAGS += $(CFLAGS)
+CCFLAGS += -std=gnu99 --static
+CCFLAGS += -Werror-implicit-function-declaration
+CCFLAGS += -Wimplicit-int
+CCFLAGS += -Wsequence-point
+
+
+CXXFLAGS += $(CFLAGS)
+
+LDFLAGS += $(SDL_LIBS)
+LDFLAGS += -lSDL_mixer
+
+SRCS :=
+SRCS += src/fmopl.cpp
+SRCS += src/id_ca.cpp
+SRCS += src/id_in.cpp
+SRCS += src/id_pm.cpp
+SRCS += src/id_sd.cpp
+SRCS += src/id_us_1.cpp
+SRCS += src/id_vh.cpp
+SRCS += src/id_vl.cpp
+SRCS += src/signon.cpp
+SRCS += src/wl_act1.cpp
+SRCS += src/wl_act2.cpp
+SRCS += src/wl_agent.cpp
+SRCS += src/wl_atmos.cpp
+SRCS += src/wl_cloudsky.cpp
+SRCS += src/wl_debug.cpp
+SRCS += src/wl_draw.cpp
+SRCS += src/wl_floorceiling.cpp
+SRCS += src/wl_game.cpp
+SRCS += src/wl_inter.cpp
+SRCS += src/wl_main.cpp
+SRCS += src/wl_menu.cpp
+SRCS += src/wl_parallax.cpp
+SRCS += src/wl_play.cpp
+SRCS += src/wl_state.cpp
+SRCS += src/wl_text.cpp
+SRCS += src/gp2x.cpp
+
+DEPS = $(filter %.d, $(SRCS:.c=.d) $(SRCS:.cpp=.d))
+OBJS = $(filter %.o, $(SRCS:.c=.o) $(SRCS:.cpp=.o))
+
+.SUFFIXES:
+.SUFFIXES: .c .cpp .d .o
+
+Q ?= @
+
+all: $(BINARY)
+
+ifndef NO_DEPS
+depend: $(DEPS)
+
+ifeq ($(findstring $(MAKECMDGOALS), clean depend Data),)
+-include $(DEPS)
+endif
+endif
+
+$(BINARY): $(OBJS)
+	@echo '===> LD $@'
+	$(Q)$(CXX) $(CFLAGS) $(OBJS) $(LDFLAGS) -o $@
+
+.c.o:
+	@echo '===> CC $<'
+	$(Q)$(CC) $(CCFLAGS) -c $< -o $@
+
+.cpp.o:
+	@echo '===> CXX $<'
+	$(Q)$(CXX) $(CXXFLAGS) -c $< -o $@
+
+.c.d:
+	@echo '===> DEP $<'
+	$(Q)$(CC) $(CCFLAGS) -MM $< | sed 's#^$(@F:%.d=%.o):#$@ $(@:%.d=%.o):#' > $@
+
+.cpp.d:
+	@echo '===> DEP $<'
+	$(Q)$(CXX) $(CXXFLAGS) -MM $< | sed 's#^$(@F:%.d=%.o):#$@ $(@:%.d=%.o):#' > $@
+
+clean distclean:
+	@echo '===> CLEAN'
+	$(Q)rm -fr $(DEPS) $(OBJS) $(BINARY) $(target)-retail.ipk
+
+install: $(BINARY)
+	@echo '===> INSTALL'
+	$(Q)$(INSTALL) -d $(PREFIX)/bin
+	$(Q)$(INSTALL_PROGRAM) $(BINARY) $(PREFIX)/bin
+
+ipk: $(BINARY)
+	@rm -rf /tmp/.$(target)-ipk/ && mkdir -p /tmp/.$(target)-ipk/root/home/retrofw/$(section)/$(target) /tmp/.$(target)-ipk/root/home/retrofw/apps/gmenu2x/sections/$(section)
+	@cp -r $(target)/* /tmp/.$(target)-ipk/root/home/retrofw/$(section)/$(target)
+	@echo title=$(title) > /tmp/.$(target)-ipk/root/home/retrofw/apps/gmenu2x/sections/$(section)/$(target).lnk
+	@echo description=$(description) >> /tmp/.$(target)-ipk/root/home/retrofw/apps/gmenu2x/sections/$(section)/$(target).lnk
+	@echo exec=/home/retrofw/$(section)/$(target)/$(target).dge >> /tmp/.$(target)-ipk/root/home/retrofw/apps/gmenu2x/sections/$(section)/$(target).lnk
+	@echo clock=600 >> /tmp/.$(target)-ipk/root/home/retrofw/apps/gmenu2x/sections/$(section)/$(target).lnk
+	@sed -e "s/^Version:.*/Version: $$(date +%Y%m%d)/" -e "s/^Section:.*/Section: $(section)/" control.$(target) > /tmp/.$(target)-ipk/control
+	@echo /home/retrofw/apps/gmenu2x/sections/$(section)/$(target).lnk > /tmp/.$(target)-ipk/conffiles
+	@tar --owner=0 --group=0 -czvf /tmp/.$(target)-ipk/control.tar.gz -C /tmp/.$(target)-ipk/ control conffiles
+	@tar --owner=0 --group=0 -czvf /tmp/.$(target)-ipk/data.tar.gz -C /tmp/.$(target)-ipk/root/ .
+	@echo 2.0 > /tmp/.$(target)-ipk/debian-binary
+	@ar r $(target)-retail.ipk /tmp/.$(target)-ipk/control.tar.gz /tmp/.$(target)-ipk/data.tar.gz /tmp/.$(target)-ipk/debian-binary
